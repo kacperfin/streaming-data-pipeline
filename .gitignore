@@ -1,2 +1,5 @@
 .claude
 .claude_tests
+.vscode
+.env
+.venv
