@@ -1,4 +1,4 @@
-from ping_api import ping_api
+from api.ping_api import ping_api
 
 # Real API call
 def test_ping_api():

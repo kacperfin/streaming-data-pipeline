@@ -1,5 +1,5 @@
 import requests
-from config import COINGECKO_BASE_URL, COINGECKO_API_KEY
+from api.config import COINGECKO_BASE_URL, COINGECKO_API_KEY
 
 def ping_api():
     url = COINGECKO_BASE_URL + '/ping'
@@ -8,5 +8,4 @@ def ping_api():
     }
 
     response = requests.get(url, params=params)
-
     return response.status_code, response.json()
