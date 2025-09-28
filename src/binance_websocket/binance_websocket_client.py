@@ -25,12 +25,12 @@ class BinanceWebsocketClient():
         print(f'error: {error}')
 
     def _on_close(self, ws, close_status_code, close_msg):
-        print('### closed connection ###')
+        print('### Connection closed ###')
         print(f'close status code: {close_status_code}')
         print(f'close message: {close_msg}')
 
     def _on_open(self, ws):
-        print('### opened connection ###')
+        print('### Connection opened ###')
 
     def run_forever(self):
         self.ws.run_forever()
@@ -39,4 +39,4 @@ def _create_socket_url(base_url: str, symbols: list[str], mode: str) -> str:
     for symbol in symbols:
         base_url += symbol + '@' + mode + '/'
 
-    return base_url[:-1]
+    return base_url[:-1] + '&timeUnit=MICROSECOND'

@@ -36,6 +36,6 @@ KEY_NAMES = {
 }
 
 VALUE_FORMATTERS = {
-    'E': lambda x: to_datetime(x, utc=True, unit='ms').strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
-    'T': lambda x: to_datetime(x, utc=True, unit='ms').strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+    'E': lambda x: to_datetime(x, utc=True, unit='us'),
+    'T': lambda x: to_datetime(x, utc=True, unit='us')
 }
