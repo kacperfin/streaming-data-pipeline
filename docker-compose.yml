@@ -1,0 +1,72 @@
+services:
+  kafka:
+    image: apache/kafka:latest
+    container_name: kafka
+    env_file: .env
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 9092 || exit 1"]
+      interval: 5s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  binance_producer:
+    build: .
+    container_name: binance_producer
+    env_file: .env
+    command: python -u binance_producer.py
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
+
+  redis:
+    image: redis:latest
+    container_name: redis
+    env_file: .env
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  prices_consumer:
+    build: .
+    container_name: prices_consumer
+    env_file: .env
+    command: python -u prices_consumer.py
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  streamlit_app:
+    build: .
+    env_file: .env
+    command: streamlit run streamlit_app.py --server.port=8501 --server.address=0.0.0.0
+    ports:
+    - "8501:8501"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health')"]
+      interval: 10s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  kafka_data:
+  redis_data:

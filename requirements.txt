@@ -1,0 +1,5 @@
+python-dotenv
+websocket-client
+kafka-python
+redis
+streamlit
