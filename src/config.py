@@ -24,3 +24,7 @@ KAFKA_CONSUMER_GROUP_ALERTS = os.getenv('KAFKA_CONSUMER_GROUP_ALERTS', 'alerts_c
 
 REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
 REDIS_PORT = int(os.getenv('REDIS_PORT', '6379'))
+
+# Streamlit
+
+STREAMLIT_REFRESH_RATE = float(os.getenv('STREAMLIT_REFRESH_RATE', 0.5))

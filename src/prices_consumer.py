@@ -5,7 +5,6 @@ import time
 
 import redis
 from kafka import KafkaConsumer
-from kafka.errors import KafkaError
 
 from config import KAFKA_BOOTSTRAP_SERVERS, KAFKA_TOPIC_PRICES, KAFKA_CONSUMER_GROUP_PRICES, REDIS_HOST, REDIS_PORT
 
@@ -102,9 +101,6 @@ class PricesConsumer:
             price_data: Price data dictionary with price and timestamps
         """
         try:
-            # Add consumer processing timestamp
-            price_data['consumer_timestamp'] = int(time.time() * 1_000_000)
-
             # Store as JSON string with key: prices:{symbol}
             redis_key = f"price:{symbol}"
             self.redis_client.set(redis_key, json.dumps(price_data)) # type: ignore

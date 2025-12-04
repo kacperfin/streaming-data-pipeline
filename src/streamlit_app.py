@@ -1,10 +1,10 @@
 import json
-import time
+from time import sleep
 from datetime import datetime
 import streamlit as st
 import redis
 
-from config import REDIS_HOST, REDIS_PORT, BINANCE_TRADING_PAIRS
+from config import REDIS_HOST, REDIS_PORT, BINANCE_TRADING_PAIRS, STREAMLIT_REFRESH_RATE
 
 # Page configuration
 st.set_page_config(
@@ -41,22 +41,6 @@ def fetch_prices(redis_client):
             st.error(f"Error fetching {key}: {e}")
 
     return prices
-
-def format_timestamp(ts_microseconds):
-    """Convert microsecond timestamp to readable format."""
-    try:
-        ts_seconds = ts_microseconds / 1_000_000
-        dt = datetime.fromtimestamp(ts_seconds)
-        return dt.strftime('%H:%M:%S.%f')  # Show full microseconds
-    except:
-        return "N/A"
-
-def calculate_latency_ms(start_ts, end_ts):
-    """Calculate latency in milliseconds between two microsecond timestamps."""
-    try:
-        return (end_ts - start_ts) / 1_000  # Convert microseconds to milliseconds
-    except:
-        return None
 
 def main():
     """Main Streamlit app."""
@@ -99,40 +83,16 @@ def main():
                             label=symbol.upper(),
                             value=f"${float(price_data['price']):,.2f}"
                         )
-
-                        # Show additional info in expander
-                        with st.expander("Details"):
-                            # Get timestamps
-                            binance_ts = price_data.get('binance_timestamp')
-                            producer_ts = price_data.get('producer_timestamp')
-                            consumer_ts = price_data.get('consumer_timestamp')
-
-                            # Display formatted timestamps
-                            st.write(f"**Binance Time:** {format_timestamp(binance_ts) if binance_ts else 'N/A'}")
-                            st.write(f"**Producer Time:** {format_timestamp(producer_ts) if producer_ts else 'N/A'}")
-                            st.write(f"**Consumer Time:** {format_timestamp(consumer_ts) if consumer_ts else 'N/A'}")
-
-                            # Calculate and display latencies
-                            if binance_ts and producer_ts and consumer_ts:
-                                st.divider()
-                                producer_latency = calculate_latency_ms(binance_ts, producer_ts)
-                                kafka_consumer_latency = calculate_latency_ms(producer_ts, consumer_ts)
-                                total_latency = calculate_latency_ms(binance_ts, consumer_ts)
-
-                                if producer_latency is not None:
-                                    st.write(f"**Producer Latency:** {producer_latency:.3f} ms")
-                                if kafka_consumer_latency is not None:
-                                    st.write(f"**Kafka + Consumer:** {kafka_consumer_latency:.3f} ms")
-                                if total_latency is not None:
-                                    st.write(f"**Total Latency:** {total_latency:.3f} ms")
+                        # Binance timestamp is in microseconds, convert to seconds for datetime
+                        timestamp_seconds = float(price_data["binance_timestamp"]) / 1_000_000
+                        st.caption(f'Last trade time (UTC): {datetime.fromtimestamp(timestamp_seconds).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]}')
 
             # Footer with refresh info
             st.divider()
-            st.caption(f"Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
             st.caption(f"Connected to Redis: {REDIS_HOST}:{REDIS_PORT}")
 
         # Refresh every 1 second
-        time.sleep(1)
+        sleep(STREAMLIT_REFRESH_RATE)
 
 if __name__ == "__main__":
     main()

@@ -3,3 +3,4 @@ websocket-client
 kafka-python
 redis
 streamlit
+prometheus_client

@@ -1,0 +1,9 @@
+global:
+  scrape_interval: 15s  # How often to scrape targets
+  evaluation_interval: 15s  # How often to evaluate rules
+
+scrape_configs:
+  # Producer metrics
+  - job_name: 'binance_producer'
+    static_configs:
+      - targets: ['binance_producer:8000']

@@ -1,12 +1,13 @@
 import json
 import logging
 import sys
-import time
+from time import time
 
 import websocket
 from kafka import KafkaProducer
 from kafka.admin import KafkaAdminClient, NewTopic
 from kafka.errors import KafkaError, TopicAlreadyExistsError
+from prometheus_client import Counter, Histogram, start_http_server
 
 from config import BINANCE_SOCKET_URL, KAFKA_BOOTSTRAP_SERVERS, KAFKA_TOPIC_PRICES
 
@@ -16,6 +17,33 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger('binance_producer')
+
+# Prometheus metrics
+PRODUCER_LATENCY = Histogram(
+    'producer_latency_seconds',
+    'Time from receiving message from Binance to sending to Kafka',
+    # Buckets optimized for sub-millisecond latencies (50µs to 100ms range)
+    buckets=(0.00005, 0.0001, 0.00025, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1),
+    labelnames=['symbol']  # Add label for symbol
+)
+
+MESSAGES_RECEIVED_TOTAL = Counter(
+    'producer_messages_received_total',
+    'Total number of messages received from Binance WebSocket',
+    labelnames=['symbol']
+)
+
+MESSAGES_SENT_TOTAL = Counter(
+    'producer_messages_sent_total',
+    'Total number of messages successfully sent to Kafka',
+    labelnames=['symbol']
+)
+
+ERRORS_TOTAL = Counter(
+    'producer_errors_total',
+    'Total number of errors encountered',
+    labelnames=['error_type']  # e.g., 'json_decode', 'kafka_send', 'processing'
+)
 
 class BinanceKafkaProducer:
     """Producer that streams data from Binance WebSocket to Kafka."""
@@ -54,7 +82,11 @@ class BinanceKafkaProducer:
             topic = NewTopic(
                 name=self.kafka_topic,
                 num_partitions=3,
-                replication_factor=1
+                replication_factor=1,
+                topic_configs={
+                    'retention.ms': '3600000',  # 1 hour = 3600000 ms
+                    'retention.bytes': '2147483648'  # 2GB per partition
+                }
             )
 
             # Try to create the topic
@@ -100,6 +132,9 @@ class BinanceKafkaProducer:
             ws: WebSocket instance
             message: Raw message from Binance
         """
+        # Start timing - capture when we received the message
+        start_time = time()
+
         try:
             # Parse the message
             data = json.loads(message)
@@ -107,26 +142,34 @@ class BinanceKafkaProducer:
             # Binance sends data in a specific format with 'stream' and 'data' fields
             if 'data' in data:
                 trade_data = data['data']
-                symbol = trade_data.get('s', 'Unknown').lower()
+                symbol = trade_data.get('s', 'unknown').lower()
+
+                price = float(trade_data.get('p')) # Trade price
+                binance_timestamp = int(trade_data.get('T'))
 
                 # Create structured message for Kafka
-                # Minimal schema optimized for price alerts and latency measurement
                 kafka_message = {
-                    'price': float(trade_data.get('p', 0)),  # Trade price
-                    'binance_timestamp': trade_data.get('T', int(time.time() * 1_000_000)),  # Binance trade timestamp (microseconds)
-                    'producer_timestamp': int(time.time() * 1_000_000),  # Producer timestamp (microseconds)
+                    'price': price,
+                    'binance_timestamp': binance_timestamp
                 }
 
                 # Send to Kafka with symbol as key for partitioning
                 self._send_to_kafka(symbol, kafka_message)
+
+                # Record metrics
                 self.received_count += 1
+                MESSAGES_RECEIVED_TOTAL.labels(symbol=symbol).inc()
+                latency = time() - start_time
+                PRODUCER_LATENCY.labels(symbol=symbol).observe(latency)
 
         except json.JSONDecodeError as e:
             logger.error(f"Failed to decode JSON message: {e}")
             self.error_count += 1
+            ERRORS_TOTAL.labels(error_type='json_decode').inc()
         except Exception as e:
             logger.error(f"Error processing message: {e}")
             self.error_count += 1
+            ERRORS_TOTAL.labels(error_type='processing').inc()
 
     def _send_to_kafka(self, key, message):
         """
@@ -138,34 +181,39 @@ class BinanceKafkaProducer:
         """
         try:
             future = self.producer.send(self.kafka_topic, key=key, value=message) # type: ignore
-            # Add callback for delivery confirmation
-            future.add_callback(self._on_send_success)
-            future.add_errback(self._on_send_error)
+            # Add callbacks for delivery confirmation
+            # Pass symbol to both callbacks so we can track metrics with the right label
+            future.add_callback(lambda metadata: self._on_send_success(metadata, key))
+            future.add_errback(lambda exception: self._on_send_error(exception, key))
 
         except KafkaError as e:
             logger.error(f"Kafka error: {e}")
             self.error_count += 1
+            ERRORS_TOTAL.labels(error_type='kafka_error').inc()
         except Exception as e:
             logger.error(f"Failed to send message to Kafka: {e}")
             self.error_count += 1
+            ERRORS_TOTAL.labels(error_type='kafka_send').inc()
 
-    def _on_send_success(self, record_metadata):
+    def _on_send_success(self, record_metadata, symbol):
         """Callback for successful message delivery."""
         self.message_count += 1
+        # Increment counter only when Kafka acknowledges (accurate tracking)
+        MESSAGES_SENT_TOTAL.labels(symbol=symbol).inc()
+
         if self.message_count % 100 == 0:
             logger.info(
                 f"Kafka acknowledged {self.message_count} messages total. "
-                f"Received from Binance: {self.received_count}. "
-                f"In-flight: {self.received_count - self.message_count}. "
-                f"Latest: topic={record_metadata.topic}, "
-                f"partition={record_metadata.partition}, "
+                f"Latest: partition={record_metadata.partition}, "
                 f"offset={record_metadata.offset}"
             )
 
-    def _on_send_error(self, exception):
+    def _on_send_error(self, exception, symbol):
         """Callback for failed message delivery."""
-        logger.error(f"Failed to send message: {exception}")
+        logger.error(f"Failed to send message for {symbol}: {exception}")
         self.error_count += 1
+        # Track which symbol had the error
+        ERRORS_TOTAL.labels(error_type='kafka_send_async').inc()
 
     def on_error(self, ws, error):
         """Handle WebSocket errors."""
@@ -228,6 +276,11 @@ def main():
     logger.info("Starting Binance -> Kafka Producer")
     logger.info(f"Target Kafka topic: {KAFKA_TOPIC_PRICES}")
     logger.info(f"Kafka bootstrap servers: {KAFKA_BOOTSTRAP_SERVERS}")
+
+    # Start Prometheus metrics HTTP server
+    metrics_port = 8000
+    start_http_server(metrics_port)
+    logger.info(f"Prometheus metrics available at http://localhost:{metrics_port}/metrics")
 
     try:
         # Create and start producer (uses config defaults)
