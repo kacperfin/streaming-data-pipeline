@@ -45,6 +45,14 @@ ERRORS_TOTAL = Counter(
     labelnames=['error_type']  # e.g., 'json_decode', 'kafka_send', 'processing'
 )
 
+BINANCE_NETWORK_LATENCY = Histogram(
+    'binance_network_latency_seconds',
+    'Network latency from Binance timestamp to producer receive time',
+    # Buckets optimized for network latencies (10ms to 5s range)
+    buckets=(0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0),
+    labelnames=['symbol']
+)
+
 class BinanceKafkaProducer:
     """Producer that streams data from Binance WebSocket to Kafka."""
 
@@ -146,6 +154,11 @@ class BinanceKafkaProducer:
 
                 price = float(trade_data.get('p')) # Trade price
                 binance_timestamp = int(trade_data.get('T'))
+
+                # Calculate network latency: Binance event time → Producer receive time
+                receive_time_us = start_time * 1_000_000  # Convert to microseconds
+                network_latency_seconds = (receive_time_us - binance_timestamp) / 1_000_000
+                BINANCE_NETWORK_LATENCY.labels(symbol=symbol).observe(network_latency_seconds)
 
                 # Create structured message for Kafka
                 kafka_message = {

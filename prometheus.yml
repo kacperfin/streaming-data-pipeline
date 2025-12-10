@@ -1,6 +1,6 @@
 global:
-  scrape_interval: 15s  # How often to scrape targets
-  evaluation_interval: 15s  # How often to evaluate rules
+  scrape_interval: 5s  # How often to scrape targets
+  evaluation_interval: 5s  # How often to evaluate rules
 
 scrape_configs:
   # Producer metrics
@@ -12,3 +12,8 @@ scrape_configs:
   - job_name: 'prices_consumer'
     static_configs:
       - targets: ['prices_consumer:8001']
+
+  # Kafka metrics (consumer lag, etc.)
+  - job_name: 'kafka'
+    static_configs:
+      - targets: ['kafka-exporter:9308']

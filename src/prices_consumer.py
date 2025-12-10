@@ -109,6 +109,9 @@ class PricesConsumer:
                 auto_offset_reset='latest',  # Start from latest messages (don't replay history)
                 enable_auto_commit=True,
                 auto_commit_interval_ms=1000,  # Commit offsets every second
+                # Low-latency tuning: minimize wait time for fetching data
+                fetch_min_bytes=1,  # Don't wait for batches, fetch immediately
+                fetch_max_wait_ms=10,  # Wait max 10ms (default is 500ms - causes latency!)
                 # Performance tuning
                 max_poll_records=500,  # Process up to 500 messages per poll
                 max_poll_interval_ms=300000,  # 5 minutes

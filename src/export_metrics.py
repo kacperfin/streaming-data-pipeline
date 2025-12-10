@@ -1,18 +1,19 @@
 """
-Experiment runner for collecting metrics from Prometheus.
+Metrics exporter for Prometheus data.
 
-This script exports calculated metrics (throughput, latency, error rates) from Prometheus
-for a specified time range. Use this to collect data for on-premise vs AWS comparison.
+This script exports metrics from Prometheus for a specified time range and outputs them
+as a unified CSV file. All metrics are aggregated in PromQL (e.g., sum across partitions)
+to simplify analysis.
 
 Workflow:
 1. Run your pipeline continuously
 2. Note the start/end times of your experiment
-3. Run this script with those timestamps to export metrics
-4. Analyze the CSV files in Pandas
+3. Run this script with those timestamps to export metrics to CSV
+4. Analyze the CSV in Pandas/Jupyter
 
 Example:
     # Export metrics for a 2-minute experiment
-    python run_experiment.py \\
+    python export_metrics.py \\
         --start "2025-12-10T15:05:00" \\
         --end "2025-12-10T15:07:00" \\
         --name "onpremise_5symbols"
@@ -24,7 +25,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 import requests
 
@@ -86,7 +87,7 @@ class PrometheusExporter:
             logger.error(f"Invalid JSON in metrics file: {e}")
             raise
 
-    def query_range(self, query: str, start: float, end: float, step: str = "15s") -> Dict:
+    def query_range(self, query: str, start: float, end: float, step: str = "5s") -> Dict:
         """
         Query Prometheus for a time range.
 
@@ -94,7 +95,7 @@ class PrometheusExporter:
             query: PromQL query string
             start: Start time (Unix timestamp)
             end: End time (Unix timestamp)
-            step: Resolution - should match scrape_interval (default: '15s')
+            step: Resolution - should match scrape_interval (default: '5s')
 
         Returns:
             Dict containing the query result
@@ -114,62 +115,18 @@ class PrometheusExporter:
             logger.error(f"Failed to query Prometheus: {e}")
             raise
 
-    def export_to_csv(self, metric_name: str, result: Dict, output_file: Path):
-        """
-        Export Prometheus query result to CSV.
 
-        Args:
-            metric_name: Name of the metric being exported
-            result: Prometheus query result (JSON)
-            output_file: Path to output CSV file
-        """
-        if result['status'] != 'success':
-            logger.error(f"Query failed: {result}")
-            return
-
-        data = result['data']['result']
-
-        if not data:
-            logger.warning(f"No data returned for metric: {metric_name}")
-            return
-
-        # Open CSV file for writing
-        with open(output_file, 'w', newline='') as csvfile:
-            # Create header: timestamp, value, and all label keys
-            all_labels = set()
-            for series in data:
-                all_labels.update(series['metric'].keys())
-
-            fieldnames = ['timestamp', 'value'] + sorted(all_labels)
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            writer.writeheader()
-
-            # Write data rows
-            for series in data:
-                labels = series['metric']
-
-                # Each series has multiple time-value pairs
-                for timestamp, value in series['values']:
-                    row = {
-                        'timestamp': datetime.fromtimestamp(timestamp).isoformat(),
-                        'value': value,
-                        **labels  # Unpack all labels
-                    }
-                    writer.writerow(row)
-
-        logger.info(f"Exported {metric_name} to {output_file}")
-
-
-def export_metrics(start_time: str, end_time: str, output_dir: Path, experiment_name: str, step: str = "15s"):
+def export_metrics(start_time: str, end_time: str, output_dir: Path, experiment_name: str, step: str = "5s"):
     """
     Export calculated metrics from Prometheus for a specific time range.
+    Creates a single unified CSV with all metrics as columns.
 
     Args:
         start_time: Start time (ISO format: "2025-12-10T15:05:00")
         end_time: End time (ISO format: "2025-12-10T15:07:00")
         output_dir: Directory to save results
         experiment_name: Name/ID for this experiment
-        step: Query resolution (default: "15s" to match scrape_interval)
+        step: Query resolution (default: "5s" to match scrape_interval)
     """
     logger.info(f"Exporting metrics for experiment: {experiment_name}")
     logger.info(f"Time range: {start_time} to {end_time}")
@@ -190,9 +147,11 @@ def export_metrics(start_time: str, end_time: str, output_dir: Path, experiment_
     # Initialize Prometheus exporter
     exporter = PrometheusExporter()
 
-    logger.info(f"Exporting {len(exporter.metrics)} calculated metrics...")
+    logger.info(f"Querying {len(exporter.metrics)} metrics from Prometheus...")
 
-    # Export each metric
+    # Collect all metrics data
+    all_metrics_data = {}  # {timestamp: {metric_name: value, ...}}
+
     for metric_name, promql_query in exporter.metrics.items():
         try:
             logger.info(f"Querying: {metric_name}")
@@ -205,14 +164,59 @@ def export_metrics(start_time: str, end_time: str, output_dir: Path, experiment_
                 step=step
             )
 
-            # Create filename
-            output_file = output_dir / f"{experiment_name}_{metric_name}.csv"
+            if result['status'] != 'success':
+                logger.error(f"Query failed for {metric_name}: {result}")
+                continue
 
-            # Export to CSV
-            exporter.export_to_csv(metric_name, result, output_file)
+            data = result['data']['result']
+
+            if not data:
+                logger.warning(f"No data returned for metric: {metric_name}")
+                continue
+
+            # Extract metric values
+            # Each metric should return a single series (aggregated in PromQL if needed)
+            for series in data:
+                for timestamp, value in series['values']:
+                    ts_iso = datetime.fromtimestamp(timestamp).isoformat()
+
+                    if ts_iso not in all_metrics_data:
+                        all_metrics_data[ts_iso] = {}
+
+                    all_metrics_data[ts_iso][metric_name] = value
 
         except Exception as e:
-            logger.error(f"Failed to export {metric_name}: {e}")
+            logger.error(f"Failed to query {metric_name}: {e}")
+
+    # Write unified CSV
+    if not all_metrics_data:
+        logger.error("No metrics data collected!")
+        return
+
+    logger.info(f"Writing unified CSV with {len(all_metrics_data)} timestamps...")
+
+    # Determine all column names
+    all_columns = set()
+    for timestamp_data in all_metrics_data.values():
+        all_columns.update(timestamp_data.keys())
+
+    sorted_columns = sorted(all_columns)
+
+    # Write to CSV
+    output_file = output_dir / f"{experiment_name}.csv"
+
+    with open(output_file, 'w', newline='') as csvfile:
+        fieldnames = ['timestamp'] + sorted_columns
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+
+        for timestamp in sorted(all_metrics_data.keys()):
+            row = {'timestamp': timestamp}
+            for column in sorted_columns:
+                row[column] = all_metrics_data[timestamp].get(column, '')
+            writer.writerow(row)
+
+    logger.info(f"Unified CSV exported: {output_file}")
 
     # Save experiment metadata
     metadata = {
@@ -221,7 +225,9 @@ def export_metrics(start_time: str, end_time: str, output_dir: Path, experiment_
         'end_time': end_time,
         'duration_seconds': duration,
         'step': step,
-        'metrics_exported': list(exporter.metrics.keys())
+        'metrics_exported': list(exporter.metrics.keys()),
+        'columns': sorted_columns,
+        'num_timestamps': len(all_metrics_data)
     }
 
     metadata_file = output_dir / f"{experiment_name}_metadata.json"
@@ -235,18 +241,18 @@ def export_metrics(start_time: str, end_time: str, output_dir: Path, experiment_
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description='Export calculated metrics from Prometheus for a time range',
+        description='Export metrics from Prometheus to CSV for a specified time range',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   # Export metrics for a 2-minute experiment
-  python run_experiment.py \\
+  python export_metrics.py \\
       --start "2025-12-10T15:05:00" \\
       --end "2025-12-10T15:07:00" \\
       --name "onpremise_5symbols"
 
-  # Use custom step (e.g., 30 seconds instead of default 15)
-  python run_experiment.py \\
+  # Use custom step (e.g., 30 seconds instead of default 5)
+  python export_metrics.py \\
       --start "2025-12-10T15:00:00" \\
       --end "2025-12-10T16:00:00" \\
       --name "onpremise_long_test" \\
@@ -280,8 +286,8 @@ Examples:
     parser.add_argument(
         '--step',
         type=str,
-        default='15s',
-        help='Query resolution - should match Prometheus scrape_interval (default: 15s)'
+        default='5s',
+        help='Query resolution - should match Prometheus scrape_interval (default: 5s)'
     )
 
     args = parser.parse_args()
@@ -295,7 +301,6 @@ Examples:
         experiment_name=args.name,
         step=args.step
     )
-
 
 if __name__ == '__main__':
     main()

@@ -70,7 +70,10 @@ def main():
                 st.warning("Waiting for price data...")
             else:
                 # Display prices in columns
-                st.subheader(f"Current prices ({len(prices)} symbols)")
+                if len(prices) == 1:
+                    st.subheader(f"Current prices ({len(prices)} symbol)")
+                else:
+                    st.subheader(f"Current prices ({len(prices)} symbols)")
 
                 # Create columns for price display
                 cols = st.columns(min(3, len(prices)))

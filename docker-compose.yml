@@ -71,6 +71,17 @@ services:
       retries: 3
       start_period: 10s
 
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:latest
+    container_name: kafka_exporter
+    command: --kafka.server=kafka:9092
+    ports:
+      - "9308:9308"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
+
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
