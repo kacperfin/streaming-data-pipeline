@@ -84,7 +84,7 @@ class BinanceKafkaProducer:
                 num_partitions=3,
                 replication_factor=1,
                 topic_configs={
-                    'retention.ms': '3600000',  # 1 hour = 3600000 ms
+                    'retention.ms': '900000',  # 15 minutes = 900000 ms
                     'retention.bytes': '2147483648'  # 2GB per partition
                 }
             )

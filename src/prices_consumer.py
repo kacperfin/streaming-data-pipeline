@@ -1,10 +1,11 @@
 import json
 import logging
 import sys
-import time
+from time import time
 
 import redis
 from kafka import KafkaConsumer
+from prometheus_client import Counter, Histogram, start_http_server
 
 from config import KAFKA_BOOTSTRAP_SERVERS, KAFKA_TOPIC_PRICES, KAFKA_CONSUMER_GROUP_PRICES, REDIS_HOST, REDIS_PORT
 
@@ -14,6 +15,33 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger('prices_consumer')
+
+# Prometheus metrics
+CONSUMER_E2E_LATENCY = Histogram(
+    'consumer_e2e_latency_seconds',
+    'End-to-end latency from Binance timestamp to consumer processing',
+    buckets=(0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0),
+    labelnames=['consumer', 'symbol']
+)
+
+CONSUMER_PROCESSING_LATENCY = Histogram(
+    'consumer_processing_latency_seconds',
+    'Time to process message (deserialize + store in Redis)',
+    buckets=(0.0001, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1),
+    labelnames=['consumer', 'symbol']
+)
+
+CONSUMER_MESSAGES_PROCESSED = Counter(
+    'consumer_messages_processed_total',
+    'Total number of messages processed by consumer',
+    labelnames=['consumer', 'symbol']
+)
+
+CONSUMER_ERRORS = Counter(
+    'consumer_errors_total',
+    'Total number of errors encountered by consumer',
+    labelnames=['consumer', 'error_type']
+)
 
 class PricesConsumer:
     """Consumer that reads price updates from Kafka and stores them in Redis."""
@@ -92,29 +120,48 @@ class PricesConsumer:
             logger.error(f"Failed to initialize Kafka consumer: {e}")
             raise
 
-    def _store_price_in_redis(self, symbol, price_data):
+    def _store_price_in_redis(self, symbol, price_data, binance_timestamp):
         """
         Store the latest price for a symbol in Redis.
 
         Args:
             symbol: Trading pair symbol (e.g., 'BTCUSDT')
             price_data: Price data dictionary with price and timestamps
+            binance_timestamp: Original timestamp from Binance (microseconds)
         """
+        processing_start = time()
+
         try:
             # Store as JSON string with key: prices:{symbol}
             redis_key = f"price:{symbol}"
             self.redis_client.set(redis_key, json.dumps(price_data)) # type: ignore
 
+            # Calculate end-to-end latency (AFTER Redis write completes)
+            # This captures the full pipeline: Binance → Producer → Kafka → Consumer → Redis
+            # Note: binance_timestamp is in microseconds from Binance API
+            current_time_us = time() * 1_000_000  # Convert to microseconds for precision
+            e2e_latency_seconds = (current_time_us - binance_timestamp) / 1_000_000
+            CONSUMER_E2E_LATENCY.labels(consumer='prices', symbol=symbol).observe(e2e_latency_seconds)
+
+            # Record processing latency (deserialization + Redis write)
+            processing_latency = time() - processing_start
+            CONSUMER_PROCESSING_LATENCY.labels(consumer='prices', symbol=symbol).observe(processing_latency)
+
+            # Record successful processing
+            CONSUMER_MESSAGES_PROCESSED.labels(consumer='prices', symbol=symbol).inc()
+
             self.message_count += 1
             if self.message_count % 100 == 0:
                 logger.info(
                     f"Processed {self.message_count} messages. "
-                    f"Latest: {symbol} = ${price_data['price']:.2f}"
+                    f"Latest: {symbol} = ${price_data['price']:.2f}, "
+                    f"E2E latency: {e2e_latency_seconds*1000:.2f}ms"
                 )
 
         except Exception as e:
             logger.error(f"Failed to store price in Redis for {symbol}: {e}")
             self.error_count += 1
+            CONSUMER_ERRORS.labels(consumer='prices', error_type='redis_store').inc()
 
     def start(self):
         """Start consuming messages from Kafka and storing them in Redis."""
@@ -132,14 +179,23 @@ class PricesConsumer:
                     if not symbol or not isinstance(price_data, dict):
                         logger.warning(f"Invalid message format: key={symbol}, value={price_data}")
                         self.error_count += 1
+                        CONSUMER_ERRORS.labels(consumer='prices', error_type='invalid_message').inc()
+                        continue
+
+                    # Extract binance timestamp
+                    binance_timestamp = price_data.get('binance_timestamp')
+                    if not binance_timestamp:
+                        logger.warning(f"Missing binance_timestamp for {symbol}")
+                        CONSUMER_ERRORS.labels(consumer='prices', error_type='missing_timestamp').inc()
                         continue
 
                     # Store in Redis
-                    self._store_price_in_redis(symbol, price_data)
+                    self._store_price_in_redis(symbol, price_data, binance_timestamp)
 
                 except Exception as e:
                     logger.error(f"Error processing message: {e}")
                     self.error_count += 1
+                    CONSUMER_ERRORS.labels(consumer='prices', error_type='processing').inc()
 
         except KeyboardInterrupt:
             logger.info("Interrupted by user")
@@ -176,6 +232,11 @@ def main():
     logger.info(f"Source Kafka topic: {KAFKA_TOPIC_PRICES}")
     logger.info(f"Consumer group: {KAFKA_CONSUMER_GROUP_PRICES}")
     logger.info(f"Target Redis keys: prices:{{symbol}}")
+
+    # Start Prometheus metrics HTTP server
+    metrics_port = 8001
+    start_http_server(metrics_port)
+    logger.info(f"Prometheus metrics available at http://localhost:{metrics_port}/metrics")
 
     try:
         # Create and start consumer (uses config defaults)
