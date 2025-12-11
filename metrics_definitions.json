@@ -1,94 +1,114 @@
 {
   "binance_producer": {
     "latency_avg": {
-      "query": "rate(producer_latency_seconds_sum[1m]) / rate(producer_latency_seconds_count[1m])",
+      "query": "sum(rate(producer_latency_seconds_sum[1m])) / sum(rate(producer_latency_seconds_count[1m]))",
       "description": "Producer average latency",
       "unit": "seconds"
     },
     "latency_p50": {
-      "query": "histogram_quantile(0.50, rate(producer_latency_seconds_bucket[1m]))",
+      "query": "histogram_quantile(0.50, sum by (le) (rate(producer_latency_seconds_bucket[1m])))",
       "description": "Producer latency 50th percentile (median)",
       "unit": "seconds"
     },
     "latency_p95": {
-      "query": "histogram_quantile(0.95, rate(producer_latency_seconds_bucket[1m]))",
+      "query": "histogram_quantile(0.95, sum by (le) (rate(producer_latency_seconds_bucket[1m])))",
       "description": "Producer latency 95th percentile",
       "unit": "seconds"
     },
     "latency_p99": {
-      "query": "histogram_quantile(0.99, rate(producer_latency_seconds_bucket[1m]))",
+      "query": "histogram_quantile(0.99, sum by (le) (rate(producer_latency_seconds_bucket[1m])))",
       "description": "Producer latency 99th percentile",
       "unit": "seconds"
     },
     "network_latency_avg": {
-      "query": "rate(binance_network_latency_seconds_sum[1m]) / rate(binance_network_latency_seconds_count[1m])",
+      "query": "sum(rate(binance_network_latency_seconds_sum[1m])) / sum(rate(binance_network_latency_seconds_count[1m]))",
       "description": "Binance network latency average (Binance timestamp to producer receive)",
       "unit": "seconds"
     },
     "network_latency_p50": {
-      "query": "histogram_quantile(0.50, rate(binance_network_latency_seconds_bucket[1m]))",
+      "query": "histogram_quantile(0.50, sum by (le) (rate(binance_network_latency_seconds_bucket[1m])))",
       "description": "Binance network latency 50th percentile",
       "unit": "seconds"
     },
     "network_latency_p95": {
-      "query": "histogram_quantile(0.95, rate(binance_network_latency_seconds_bucket[1m]))",
+      "query": "histogram_quantile(0.95, sum by (le) (rate(binance_network_latency_seconds_bucket[1m])))",
       "description": "Binance network latency 95th percentile",
       "unit": "seconds"
     },
     "network_latency_p99": {
-      "query": "histogram_quantile(0.99, rate(binance_network_latency_seconds_bucket[1m]))",
+      "query": "histogram_quantile(0.99, sum by (le) (rate(binance_network_latency_seconds_bucket[1m])))",
       "description": "Binance network latency 99th percentile",
       "unit": "seconds"
     },
     "receive_rate_msg_per_sec": {
-      "query": "rate(producer_messages_received_total[1m])",
+      "query": "sum(rate(producer_messages_received_total[1m]))",
       "description": "Producer receive rate: messages received from Binance per second",
       "unit": "msg/s"
     },
     "throughput_msg_per_sec": {
-      "query": "rate(producer_messages_sent_total[1m])",
+      "query": "sum(rate(producer_messages_sent_total[1m]))",
       "description": "Producer throughput: messages sent to Kafka per second",
       "unit": "msg/s"
     },
     "errors_per_sec": {
-      "query": "rate(producer_errors_total[1m])",
+      "query": "sum(rate(producer_errors_total[1m]))",
       "description": "Producer errors per second",
       "unit": "errors/s"
     }
   },
   "prices_consumer": {
     "e2e_latency_avg": {
-      "query": "rate(consumer_e2e_latency_seconds_sum{consumer='prices'}[1m]) / rate(consumer_e2e_latency_seconds_count{consumer='prices'}[1m])",
+      "query": "sum(rate(consumer_e2e_latency_seconds_sum{consumer='prices'}[1m])) / sum(rate(consumer_e2e_latency_seconds_count{consumer='prices'}[1m]))",
       "description": "Prices consumer end-to-end latency average (Binance timestamp to processing)",
       "unit": "seconds"
     },
     "e2e_latency_p50": {
-      "query": "histogram_quantile(0.50, rate(consumer_e2e_latency_seconds_bucket{consumer='prices'}[1m]))",
+      "query": "histogram_quantile(0.50, sum by (le) (rate(consumer_e2e_latency_seconds_bucket{consumer='prices'}[1m])))",
       "description": "Prices consumer end-to-end latency 50th percentile",
       "unit": "seconds"
     },
     "e2e_latency_p95": {
-      "query": "histogram_quantile(0.95, rate(consumer_e2e_latency_seconds_bucket{consumer='prices'}[1m]))",
+      "query": "histogram_quantile(0.95, sum by (le) (rate(consumer_e2e_latency_seconds_bucket{consumer='prices'}[1m])))",
       "description": "Prices consumer end-to-end latency 95th percentile",
       "unit": "seconds"
     },
     "e2e_latency_p99": {
-      "query": "histogram_quantile(0.99, rate(consumer_e2e_latency_seconds_bucket{consumer='prices'}[1m]))",
+      "query": "histogram_quantile(0.99, sum by (le) (rate(consumer_e2e_latency_seconds_bucket{consumer='prices'}[1m])))",
       "description": "Prices consumer end-to-end latency 99th percentile",
       "unit": "seconds"
     },
+    "system_latency_avg": {
+      "query": "sum(rate(consumer_system_latency_seconds_sum{consumer='prices'}[1m])) / sum(rate(consumer_system_latency_seconds_count{consumer='prices'}[1m]))",
+      "description": "System latency average: producer receive to consumer done (pipeline overhead, excludes network)",
+      "unit": "seconds"
+    },
+    "system_latency_p50": {
+      "query": "histogram_quantile(0.50, sum by (le) (rate(consumer_system_latency_seconds_bucket{consumer='prices'}[1m])))",
+      "description": "System latency 50th percentile",
+      "unit": "seconds"
+    },
+    "system_latency_p95": {
+      "query": "histogram_quantile(0.95, sum by (le) (rate(consumer_system_latency_seconds_bucket{consumer='prices'}[1m])))",
+      "description": "System latency 95th percentile",
+      "unit": "seconds"
+    },
+    "system_latency_p99": {
+      "query": "histogram_quantile(0.99, sum by (le) (rate(consumer_system_latency_seconds_bucket{consumer='prices'}[1m])))",
+      "description": "System latency 99th percentile",
+      "unit": "seconds"
+    },
     "processing_latency_avg": {
-      "query": "rate(consumer_processing_latency_seconds_sum{consumer='prices'}[1m]) / rate(consumer_processing_latency_seconds_count{consumer='prices'}[1m])",
+      "query": "sum(rate(consumer_processing_latency_seconds_sum{consumer='prices'}[1m])) / sum(rate(consumer_processing_latency_seconds_count{consumer='prices'}[1m]))",
       "description": "Prices consumer processing latency average",
       "unit": "seconds"
     },
     "throughput_msg_per_sec": {
-      "query": "rate(consumer_messages_processed_total{consumer='prices'}[1m])",
+      "query": "sum(rate(consumer_messages_processed_total{consumer='prices'}[1m]))",
       "description": "Prices consumer throughput: messages processed per second",
       "unit": "msg/s"
     },
     "errors_per_sec": {
-      "query": "rate(consumer_errors_total{consumer='prices'}[1m])",
+      "query": "sum(rate(consumer_errors_total{consumer='prices'}[1m]))",
       "description": "Prices consumer errors per second",
       "unit": "errors/s"
     },

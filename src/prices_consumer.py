@@ -20,14 +20,21 @@ logger = logging.getLogger('prices_consumer')
 CONSUMER_E2E_LATENCY = Histogram(
     'consumer_e2e_latency_seconds',
     'End-to-end latency from Binance timestamp to consumer processing',
-    buckets=(0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0),
+    buckets=(0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0),
+    labelnames=['consumer', 'symbol']
+)
+
+CONSUMER_SYSTEM_LATENCY = Histogram(
+    'consumer_system_latency_seconds',
+    'System latency: producer receive to consumer processing complete (pipeline overhead)',
+    buckets=(0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
     labelnames=['consumer', 'symbol']
 )
 
 CONSUMER_PROCESSING_LATENCY = Histogram(
     'consumer_processing_latency_seconds',
     'Time to process message (deserialize + store in Redis)',
-    buckets=(0.0001, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1),
+    buckets=(0.0001, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.5, 1.0, 5.0),
     labelnames=['consumer', 'symbol']
 )
 
@@ -143,18 +150,27 @@ class PricesConsumer:
             # This captures the full pipeline: Binance → Producer → Kafka → Consumer → Redis
             # Note: binance_timestamp is in microseconds from Binance API
             current_time_us = time() * 1_000_000  # Convert to microseconds for precision
+            current_time_seconds = current_time_us / 1_000_000  # Also keep in seconds for consistency
             e2e_latency_seconds = (current_time_us - binance_timestamp) / 1_000_000
             CONSUMER_E2E_LATENCY.labels(consumer='prices', symbol=symbol).observe(e2e_latency_seconds)
 
+            # Calculate system latency (pipeline overhead): Producer receive → Consumer done
+            # This excludes network latency from Binance to Producer
+            received_timestamp = price_data.get('received_timestamp')
+            if received_timestamp:
+                system_latency_seconds = (current_time_us - received_timestamp) / 1_000_000
+                CONSUMER_SYSTEM_LATENCY.labels(consumer='prices', symbol=symbol).observe(system_latency_seconds)
+
             # Record processing latency (deserialization + Redis write)
-            processing_latency = time() - processing_start
+            # Use the same timestamp as other metrics for consistency
+            processing_latency = current_time_seconds - processing_start
             CONSUMER_PROCESSING_LATENCY.labels(consumer='prices', symbol=symbol).observe(processing_latency)
 
             # Record successful processing
             CONSUMER_MESSAGES_PROCESSED.labels(consumer='prices', symbol=symbol).inc()
 
             self.message_count += 1
-            if self.message_count % 100 == 0:
+            if self.message_count % 1000 == 0:
                 logger.info(
                     f"Processed {self.message_count} messages. "
                     f"Latest: {symbol} = ${price_data['price']:.2f}, "

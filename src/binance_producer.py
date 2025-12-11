@@ -22,8 +22,8 @@ logger = logging.getLogger('binance_producer')
 PRODUCER_LATENCY = Histogram(
     'producer_latency_seconds',
     'Time from receiving message from Binance to sending to Kafka',
-    # Buckets optimized for sub-millisecond latencies (50µs to 100ms range)
-    buckets=(0.00005, 0.0001, 0.00025, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1),
+    # Buckets optimized for sub-millisecond latencies, extended for outliers (e.g., Kafka blocking)
+    buckets=(0.00005, 0.0001, 0.00025, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.5, 1.0, 5.0, 10.0),
     labelnames=['symbol']  # Add label for symbol
 )
 
@@ -48,8 +48,8 @@ ERRORS_TOTAL = Counter(
 BINANCE_NETWORK_LATENCY = Histogram(
     'binance_network_latency_seconds',
     'Network latency from Binance timestamp to producer receive time',
-    # Buckets optimized for network latencies (10ms to 5s range)
-    buckets=(0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0),
+    # Buckets optimized for network latencies (10ms to 60s range, extended for outliers)
+    buckets=(0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0),
     labelnames=['symbol']
 )
 
@@ -157,15 +157,19 @@ class BinanceKafkaProducer:
                 if len(str(binance_timestamp)) != 16:
                     raise ValueError(f'Invalid Binance timestamp: {binance_timestamp} (expected 16 digits for microseconds)')
 
-                # Calculate network latency: Binance event time → Producer receive time
+                # Calculate when we received the message (for latency breakdown in consumer)
                 receive_time_us = start_time * 1_000_000  # Convert to microseconds
+
+                # Calculate network latency: Binance event time → Producer receive time
                 network_latency_seconds = (receive_time_us - binance_timestamp) / 1_000_000
                 BINANCE_NETWORK_LATENCY.labels(symbol=symbol).observe(network_latency_seconds)
 
                 # Create structured message for Kafka
+                # Include received_timestamp so consumer can calculate network vs system latency
                 kafka_message = {
                     'price': price,
-                    'binance_timestamp': binance_timestamp
+                    'binance_timestamp': binance_timestamp,
+                    'received_timestamp': int(receive_time_us)  # When producer received from Binance
                 }
 
                 # Send to Kafka with symbol as key for partitioning
@@ -173,9 +177,9 @@ class BinanceKafkaProducer:
 
                 # Record metrics
                 self.received_count += 1
-                MESSAGES_RECEIVED_TOTAL.labels(symbol=symbol).inc()
                 latency = time() - start_time
                 PRODUCER_LATENCY.labels(symbol=symbol).observe(latency)
+                MESSAGES_RECEIVED_TOTAL.labels(symbol=symbol).inc()
 
         except json.JSONDecodeError as e:
             logger.error(f"Failed to decode JSON message: {e}")
@@ -216,7 +220,7 @@ class BinanceKafkaProducer:
         # Increment counter only when Kafka acknowledges (accurate tracking)
         MESSAGES_SENT_TOTAL.labels(symbol=symbol).inc()
 
-        if self.message_count % 100 == 0:
+        if self.message_count % 1000 == 0:
             logger.info(
                 f"Kafka acknowledged {self.message_count} messages total. "
                 f"Latest: partition={record_metadata.partition}, "
