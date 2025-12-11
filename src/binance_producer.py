@@ -154,6 +154,8 @@ class BinanceKafkaProducer:
 
                 price = float(trade_data.get('p')) # Trade price
                 binance_timestamp = int(trade_data.get('T'))
+                if len(str(binance_timestamp)) != 16:
+                    raise ValueError(f'Invalid Binance timestamp: {binance_timestamp} (expected 16 digits for microseconds)')
 
                 # Calculate network latency: Binance event time → Producer receive time
                 receive_time_us = start_time * 1_000_000  # Convert to microseconds

@@ -11,7 +11,6 @@ import time
 import requests
 import numpy as np
 
-
 def measure_single_skew() -> tuple[float, float]:
     """
     Measure clock skew for a single request.
@@ -101,7 +100,6 @@ def measure_clock_skew(num_samples: int = 10) -> None:
     else:
         print(f"Your local clock is {abs(mean_skew):.2f}ms BEHIND Binance.")
         print("This means measured latencies will appear LOWER than actual.")
-
 
 if __name__ == "__main__":
     import argparse
