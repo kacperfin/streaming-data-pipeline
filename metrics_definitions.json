@@ -117,5 +117,37 @@
       "description": "Kafka consumer lag (total messages behind across all partitions)",
       "unit": "messages"
     }
+  },
+  "infrastructure": {
+    "cpu_usage_total": {
+      "query": "sum(rate(container_cpu_usage_seconds_total{name!=\"\"}[1m]))",
+      "description": "Total CPU usage across all containers (fraction of cores)",
+      "unit": "cores"
+    },
+    "memory_usage_total": {
+      "query": "sum(container_memory_working_set_bytes{name!=\"\"})",
+      "description": "Total memory usage across all containers",
+      "unit": "bytes"
+    },
+    "network_receive_bytes_per_sec": {
+      "query": "sum(rate(container_network_receive_bytes_total{name!=\"\"}[1m]))",
+      "description": "Total network receive rate across all containers",
+      "unit": "bytes/s"
+    },
+    "network_transmit_bytes_per_sec": {
+      "query": "sum(rate(container_network_transmit_bytes_total{name!=\"\"}[1m]))",
+      "description": "Total network transmit rate across all containers",
+      "unit": "bytes/s"
+    },
+    "disk_read_bytes_per_sec": {
+      "query": "sum(rate(container_fs_reads_bytes_total{name!=\"\"}[1m]))",
+      "description": "Total disk read rate across all containers",
+      "unit": "bytes/s"
+    },
+    "disk_write_bytes_per_sec": {
+      "query": "sum(rate(container_fs_writes_bytes_total{name!=\"\"}[1m]))",
+      "description": "Total disk write rate across all containers",
+      "unit": "bytes/s"
+    }
   }
 }

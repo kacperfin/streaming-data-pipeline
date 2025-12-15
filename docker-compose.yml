@@ -13,10 +13,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    restart: unless-stopped
 
-  binance_producer:
+  binance-producer:
     build: .
-    container_name: binance_producer
+    container_name: binance-producer
     env_file: .env
     command: python -u binance_producer.py
     ports:
@@ -40,10 +41,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    restart: unless-stopped
 
-  prices_consumer:
+  prices-consumer:
     build: .
-    container_name: prices_consumer
+    container_name: prices-consumer
     env_file: .env
     command: python -u prices_consumer.py
     ports:
@@ -55,8 +57,9 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  streamlit_app:
+  streamlit-app:
     build: .
+    container_name: streamlit-app
     env_file: .env
     command: streamlit run streamlit_app.py --server.port=8501 --server.address=0.0.0.0
     ports:
@@ -70,10 +73,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+    restart: unless-stopped
 
   kafka-exporter:
     image: danielqsj/kafka-exporter:latest
-    container_name: kafka_exporter
+    container_name: kafka-exporter
     command: --kafka.server=kafka:9092
     ports:
       - "9308:9308"
@@ -110,6 +114,24 @@ services:
       - grafana_data:/var/lib/grafana
     depends_on:
       - prometheus
+    restart: unless-stopped
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.52.0
+    container_name: cadvisor
+    command:
+      - --housekeeping_interval=5s
+      - --enable_metrics=cpu,cpuLoad,memory,network,diskIO
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
     restart: unless-stopped
 
 volumes:

@@ -127,6 +127,12 @@ def export_metrics(start_time: str, end_time: str, output_dir: Path, experiment_
         output_dir: Directory to save results
         experiment_name: Name/ID for this experiment
         step: Query resolution (default: "5s" to match scrape_interval)
+
+    Note:
+        PromQL queries in metrics_definitions.json must return a single time series. If a query returns multiple
+        series (e.g., using "sum by (label)" which returns one series per label value),
+        values will overwrite each other and only the last series will be kept.
+        Use aggregations like "sum()" to ensure a single series per metric.
     """
     logger.info(f"Exporting metrics for experiment: {experiment_name}")
     logger.info(f"Time range: {start_time} to {end_time}")

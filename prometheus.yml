@@ -4,16 +4,21 @@ global:
 
 scrape_configs:
   # Producer metrics
-  - job_name: 'binance_producer'
+  - job_name: 'binance-producer'
     static_configs:
-      - targets: ['binance_producer:8000']
+      - targets: ['binance-producer:8000']
 
   # Prices Consumer metrics
-  - job_name: 'prices_consumer'
+  - job_name: 'prices-consumer'
     static_configs:
-      - targets: ['prices_consumer:8001']
+      - targets: ['prices-consumer:8001']
 
   # Kafka metrics (consumer lag, etc.)
   - job_name: 'kafka'
     static_configs:
       - targets: ['kafka-exporter:9308']
+
+  # Container metrics (CPU, memory, etc.)
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
