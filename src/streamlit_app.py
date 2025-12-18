@@ -1,10 +1,18 @@
+"""
+Streamlit Dashboard: Real-time cryptocurrency prices and alerts.
+
+Web-based dashboard that displays current cryptocurrency prices and recent
+trading alerts from the data pipeline. Reads data from Redis and refreshes
+automatically to show real-time updates.
+"""
+
 import json
 from time import sleep
 from datetime import datetime
 import streamlit as st
 import redis
 
-from config import REDIS_HOST, REDIS_PORT, BINANCE_TRADING_PAIRS, STREAMLIT_REFRESH_RATE
+from config import REDIS_HOST, REDIS_PORT, BINANCE_TRADING_PAIRS, STREAMLIT_REFRESH_RATE, STREAMLIT_MAX_ALERTS
 
 # Page configuration
 st.set_page_config(
@@ -43,8 +51,11 @@ def fetch_prices(redis_client):
 
     return prices
 
-def fetch_alerts(redis_client, max_alerts=20):
+def fetch_alerts(redis_client, max_alerts=None):
     """Fetch recent alerts from Redis list (last max_alerts entries)."""
+    if max_alerts is None:
+        max_alerts = STREAMLIT_MAX_ALERTS
+
     try:
         # Get last max_alerts from the 'alerts' list
         # -max_alerts to -1 gets the last max_alerts entries
@@ -116,7 +127,7 @@ def main():
             current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC")
             st.caption(f"Current time: {current_time}")
 
-            alerts = fetch_alerts(redis_client, max_alerts=20)
+            alerts = fetch_alerts(redis_client)
 
             if not alerts:
                 st.info("No alerts yet. Alerts are generated when price changes by more than the threshold within a 1-minute window.")

@@ -13,7 +13,10 @@ import redis
 from kafka import KafkaConsumer
 from prometheus_client import Counter, Histogram, start_http_server
 
-from config import KAFKA_BOOTSTRAP_SERVERS, KAFKA_TOPIC_ALERTS, KAFKA_CONSUMER_GROUP_ALERTS, REDIS_HOST, REDIS_PORT, REDIS_MAX_ALERTS
+from config import (
+    KAFKA_BOOTSTRAP_SERVERS, KAFKA_TOPIC_ALERTS, KAFKA_CONSUMER_GROUP_ALERTS,
+    REDIS_HOST, REDIS_PORT, REDIS_MAX_ALERTS, METRICS_PORT_ALERTS_CONSUMER
+)
 
 # Configure logging
 logging.basicConfig(
@@ -234,9 +237,8 @@ def main():
     logger.info(f"Target Redis key: alerts")
 
     # Start Prometheus metrics HTTP server
-    metrics_port = 8003
-    start_http_server(metrics_port)
-    logger.info(f"Prometheus metrics available at http://localhost:{metrics_port}/metrics")
+    start_http_server(METRICS_PORT_ALERTS_CONSUMER)
+    logger.info(f"Prometheus metrics available at http://localhost:{METRICS_PORT_ALERTS_CONSUMER}/metrics")
 
     try:
         # Create and start consumer (uses config defaults)
@@ -246,7 +248,6 @@ def main():
     except Exception as e:
         logger.error(f"Fatal error: {e}")
         sys.exit(1)
-
 
 if __name__ == "__main__":
     main()

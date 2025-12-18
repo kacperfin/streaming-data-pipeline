@@ -1,9 +1,16 @@
+"""
+Clock Skew Monitor: Measures time difference between local system and Binance servers.
+
+Periodically queries Binance REST API to measure clock skew, which is important
+for accurate latency measurements when comparing local timestamps with Binance timestamps.
+Exposes metrics via Prometheus.
+"""
+
 import time
 import requests
 import logging
 import sys
-import os
-from prometheus_client import start_http_server, Gauge, Counter, Histogram
+from prometheus_client import start_http_server, Gauge, Counter
 
 # Configure logging
 logging.basicConfig(
@@ -12,7 +19,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger('clock_skew_monitor')
 
-from config import CLOCK_SKEW_MONITOR_INTERVAL_SECONDS
+from config import CLOCK_SKEW_MONITOR_INTERVAL_SECONDS, METRICS_PORT_CLOCK_SKEW_MONITOR
 
 # Prometheus Metrics
 CLOCK_SKEW = Gauge(
@@ -72,9 +79,8 @@ def main():
     logger.info(f"Check interval: {CLOCK_SKEW_MONITOR_INTERVAL_SECONDS} seconds")
 
     # Start Prometheus metrics HTTP server
-    metrics_port = 8004
-    start_http_server(metrics_port)
-    logger.info(f"Prometheus metrics available at http://localhost:{metrics_port}/metrics")
+    start_http_server(METRICS_PORT_CLOCK_SKEW_MONITOR)
+    logger.info(f"Prometheus metrics available at http://localhost:{METRICS_PORT_CLOCK_SKEW_MONITOR}/metrics")
 
     # Main Loop
     while True:

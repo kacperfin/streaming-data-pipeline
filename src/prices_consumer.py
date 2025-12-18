@@ -1,3 +1,11 @@
+"""
+Prices Consumer: Reads price updates from Kafka and stores them in Redis.
+
+Consumes price messages from the 'prices' Kafka topic (produced by Binance producer)
+and stores the latest price for each symbol in Redis for display in Streamlit dashboard.
+Tracks end-to-end latency metrics.
+"""
+
 import json
 import logging
 import sys
@@ -7,7 +15,10 @@ import redis
 from kafka import KafkaConsumer
 from prometheus_client import Counter, Histogram, start_http_server
 
-from config import KAFKA_BOOTSTRAP_SERVERS, KAFKA_TOPIC_PRICES, KAFKA_CONSUMER_GROUP_PRICES, REDIS_HOST, REDIS_PORT
+from config import (
+    KAFKA_BOOTSTRAP_SERVERS, KAFKA_TOPIC_PRICES, KAFKA_CONSUMER_GROUP_PRICES,
+    REDIS_HOST, REDIS_PORT, METRICS_PORT_PRICES_CONSUMER
+)
 
 # Configure logging
 logging.basicConfig(
@@ -253,9 +264,8 @@ def main():
     logger.info(f"Target Redis keys: prices:{{symbol}}")
 
     # Start Prometheus metrics HTTP server
-    metrics_port = 8001
-    start_http_server(metrics_port)
-    logger.info(f"Prometheus metrics available at http://localhost:{metrics_port}/metrics")
+    start_http_server(METRICS_PORT_PRICES_CONSUMER)
+    logger.info(f"Prometheus metrics available at http://localhost:{METRICS_PORT_PRICES_CONSUMER}/metrics")
 
     try:
         # Create and start consumer (uses config defaults)

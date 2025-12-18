@@ -1,7 +1,15 @@
+"""
+Binance WebSocket Producer for Kafka.
+
+Connects to Binance WebSocket API to receive real-time cryptocurrency
+price data and publishes it to a Kafka topic for downstream processing.
+Exposes Prometheus metrics for monitoring producer performance.
+"""
+
 import json
 import logging
 import sys
-from time import time
+from time import time, sleep
 
 import websocket
 from kafka import KafkaProducer
@@ -9,7 +17,11 @@ from kafka.admin import KafkaAdminClient, NewTopic
 from kafka.errors import KafkaError, TopicAlreadyExistsError
 from prometheus_client import Counter, Histogram, start_http_server
 
-from config import BINANCE_SOCKET_URL, KAFKA_BOOTSTRAP_SERVERS, KAFKA_TOPIC_PRICES, KAFKA_PRICES_TOPIC_NUM_PARTITIONS
+from config import (
+    BINANCE_SOCKET_URL, KAFKA_BOOTSTRAP_SERVERS, KAFKA_TOPIC_PRICES,
+    KAFKA_PRICES_TOPIC_NUM_PARTITIONS, METRICS_PORT_BINANCE_PRODUCER,
+    BINANCE_WEBSOCKET_RECONNECT_WAIT_TIME_SECONDS
+)
 
 # Configure logging
 logging.basicConfig(
@@ -248,29 +260,35 @@ class BinanceKafkaProducer:
         logger.info("Starting to receive cryptocurrency price data...")
 
     def start(self):
-        """Start the producer - connect to Binance and stream to Kafka."""
-        try:
-            logger.info(f"Connecting to Binance WebSocket: {BINANCE_SOCKET_URL}")
+        """Start the producer with automatic reconnection."""
+        logger.info(f"Connecting to Binance WebSocket: {BINANCE_SOCKET_URL}")
 
-            # Create WebSocket connection
-            self.ws = websocket.WebSocketApp(
-                BINANCE_SOCKET_URL,
-                on_message=self.on_message,
-                on_error=self.on_error,
-                on_close=self.on_close,
-                on_open=self.on_open
-            )
+        while True:
+            try:
+                # Create a new WebSocket instance for each attempt
+                self.ws = websocket.WebSocketApp(
+                    BINANCE_SOCKET_URL,
+                    on_message=self.on_message,
+                    on_error=self.on_error,
+                    on_close=self.on_close,
+                    on_open=self.on_open
+                )
 
-            # Run the WebSocket connection (blocks until connection closes)
-            self.ws.run_forever()
+                # blocks until connection closes
+                self.ws.run_forever()
+                
+                # If run_forever returns, the connection was lost
+                logger.warning("WebSocket closed. Retrying in 5 seconds...")
 
-        except KeyboardInterrupt:
-            logger.info("Interrupted by user")
-        except Exception as e:
-            logger.error(f"Error in producer: {e}")
-            raise
-        finally:
-            self.stop()
+            except KeyboardInterrupt:
+                logger.info("Stopped by user.")
+                self.stop()
+                break 
+            except Exception as e:
+                logger.error(f"Connection error: {e}. Retrying in 5 seconds...")
+            
+            # Crucial: wait before retrying to avoid spamming the Binance API
+            sleep(BINANCE_WEBSOCKET_RECONNECT_WAIT_TIME_SECONDS)
 
     def stop(self):
         """Stop the producer and cleanup resources."""
@@ -297,9 +315,8 @@ def main():
     logger.info(f"Kafka bootstrap servers: {KAFKA_BOOTSTRAP_SERVERS}")
 
     # Start Prometheus metrics HTTP server
-    metrics_port = 8000
-    start_http_server(metrics_port)
-    logger.info(f"Prometheus metrics available at http://localhost:{metrics_port}/metrics")
+    start_http_server(METRICS_PORT_BINANCE_PRODUCER)
+    logger.info(f"Prometheus metrics available at http://localhost:{METRICS_PORT_BINANCE_PRODUCER}/metrics")
 
     try:
         # Create and start producer (uses config defaults)

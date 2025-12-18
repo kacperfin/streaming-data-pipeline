@@ -21,7 +21,7 @@ services:
     env_file: .env
     command: python -u binance_producer.py
     ports:
-      - "8000:8000"  # Expose Prometheus metrics
+      - "${METRICS_PORT_BINANCE_PRODUCER}:${METRICS_PORT_BINANCE_PRODUCER}"
     depends_on:
       kafka:
         condition: service_healthy
@@ -49,7 +49,7 @@ services:
     env_file: .env
     command: python -u prices_consumer.py
     ports:
-      - "8001:8001"  # Expose Prometheus metrics
+      - "${METRICS_PORT_PRICES_CONSUMER}:${METRICS_PORT_PRICES_CONSUMER}"
     depends_on:
       kafka:
         condition: service_healthy
@@ -68,12 +68,12 @@ services:
       --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.7
       --conf spark.jars.ivy=/tmp/.ivy2
       --master local[*]
-      --conf spark.driver.memory=1g
-      --conf spark.executor.memory=1g
+      --conf spark.driver.memory=2g
+      --conf spark.executor.memory=2g
       /app/src/spark_processor.py
     ports:
       - "4040:4040"
-      - "8002:8002"  # Expose Prometheus metrics
+      - "${METRICS_PORT_SPARK_PROCESSOR}:${METRICS_PORT_SPARK_PROCESSOR}"
     volumes:
       - spark_checkpoints:/tmp/spark-checkpoints
     depends_on:
@@ -87,7 +87,7 @@ services:
     env_file: .env
     command: python -u alerts_consumer.py
     ports:
-      - "8003:8003"  # Expose Prometheus metrics
+      - "${METRICS_PORT_ALERTS_CONSUMER}:${METRICS_PORT_ALERTS_CONSUMER}"
     depends_on:
       kafka:
         condition: service_healthy
@@ -149,11 +149,8 @@ services:
     container_name: clock-skew-monitor
     env_file: .env
     command: python -u clock_skew_monitor.py
-    environment:
-      - CLOCK_SKEW_INTERVAL=30
-      - CLOCK_SKEW_METRICS_PORT=8004
     ports:
-      - "8004:8004"
+      - "${METRICS_PORT_CLOCK_SKEW_MONITOR}:${METRICS_PORT_CLOCK_SKEW_MONITOR}"
     restart: unless-stopped
 
   prometheus:

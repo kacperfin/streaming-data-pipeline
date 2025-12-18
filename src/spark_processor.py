@@ -25,7 +25,8 @@ from prometheus_client import Counter, Histogram, start_http_server
 
 from config import (
     KAFKA_BOOTSTRAP_SERVERS, KAFKA_TOPIC_PRICES, KAFKA_TOPIC_ALERTS,
-    SPARK_ALERT_THRESHOLD, KAFKA_ALERTS_TOPIC_NUM_PARTITIONS
+    SPARK_ALERT_THRESHOLD, KAFKA_ALERTS_TOPIC_NUM_PARTITIONS,
+    METRICS_PORT_SPARK_PROCESSOR
 )
 
 # Configure logging
@@ -180,15 +181,14 @@ def main():
     logger.info(f"Source topic: {KAFKA_TOPIC_PRICES}")
 
     # Start Prometheus metrics server in background thread
-    metrics_port = 8002
     metrics_thread = threading.Thread(
         target=start_http_server,
-        args=(metrics_port,),
+        args=(METRICS_PORT_SPARK_PROCESSOR,),
         daemon=True,
         name="prometheus-metrics"
     )
     metrics_thread.start()
-    logger.info(f"Prometheus metrics server started on port {metrics_port}")
+    logger.info(f"Prometheus metrics server started on port {METRICS_PORT_SPARK_PROCESSOR}")
 
     # Create alerts topic if needed
     _create_topic_if_not_exists()
