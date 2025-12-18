@@ -9,7 +9,7 @@ from kafka.admin import KafkaAdminClient, NewTopic
 from kafka.errors import KafkaError, TopicAlreadyExistsError
 from prometheus_client import Counter, Histogram, start_http_server
 
-from config import BINANCE_SOCKET_URL, KAFKA_BOOTSTRAP_SERVERS, KAFKA_TOPIC_PRICES
+from config import BINANCE_SOCKET_URL, KAFKA_BOOTSTRAP_SERVERS, KAFKA_TOPIC_PRICES, KAFKA_PRICES_TOPIC_NUM_PARTITIONS
 
 # Configure logging
 logging.basicConfig(
@@ -86,10 +86,10 @@ class BinanceKafkaProducer:
                 client_id='binance_producer_admin'
             )
 
-            # Define topic with 3 partitions and replication factor 1 (single-node setup)
+            # Define topic with partitions from config and replication factor 1 (single-node setup)
             topic = NewTopic(
                 name=self.kafka_topic,
-                num_partitions=3,
+                num_partitions=KAFKA_PRICES_TOPIC_NUM_PARTITIONS,
                 replication_factor=1,
                 topic_configs={
                     'retention.ms': '900000',  # 15 minutes = 900000 ms
@@ -99,7 +99,7 @@ class BinanceKafkaProducer:
 
             # Try to create the topic
             admin_client.create_topics(new_topics=[topic], validate_only=False)
-            logger.info(f"Topic '{self.kafka_topic}' created successfully with 3 partitions")
+            logger.info(f"Topic '{self.kafka_topic}' created successfully with {KAFKA_PRICES_TOPIC_NUM_PARTITIONS} partitions")
 
         except TopicAlreadyExistsError:
             logger.info(f"Topic '{self.kafka_topic}' already exists")

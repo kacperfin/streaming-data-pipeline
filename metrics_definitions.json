@@ -102,6 +102,21 @@
       "description": "Prices consumer processing latency average",
       "unit": "seconds"
     },
+    "processing_latency_p50": {
+      "query": "histogram_quantile(0.50, sum by (le) (rate(consumer_processing_latency_seconds_bucket{consumer='prices'}[1m])))",
+      "description": "Prices consumer processing latency 50th percentile",
+      "unit": "seconds"
+    },
+    "processing_latency_p95": {
+      "query": "histogram_quantile(0.95, sum by (le) (rate(consumer_processing_latency_seconds_bucket{consumer='prices'}[1m])))",
+      "description": "Prices consumer processing latency 95th percentile",
+      "unit": "seconds"
+    },
+    "processing_latency_p99": {
+      "query": "histogram_quantile(0.99, sum by (le) (rate(consumer_processing_latency_seconds_bucket{consumer='prices'}[1m])))",
+      "description": "Prices consumer processing latency 99th percentile",
+      "unit": "seconds"
+    },
     "throughput_msg_per_sec": {
       "query": "sum(rate(consumer_messages_processed_total{consumer='prices'}[1m]))",
       "description": "Prices consumer throughput: messages processed per second",
@@ -116,6 +131,95 @@
       "query": "sum(kafka_consumergroup_lag{consumergroup='prices_consumer_group', topic='prices'})",
       "description": "Kafka consumer lag (total messages behind across all partitions)",
       "unit": "messages"
+    }
+  },
+  "alerts_consumer": {
+    "processing_latency_avg": {
+      "query": "sum(rate(consumer_processing_latency_seconds_sum{consumer='alerts'}[1m])) / sum(rate(consumer_processing_latency_seconds_count{consumer='alerts'}[1m]))",
+      "description": "Alerts consumer processing latency average (deserialize + store in Redis)",
+      "unit": "seconds"
+    },
+    "processing_latency_p50": {
+      "query": "histogram_quantile(0.50, sum by (le) (rate(consumer_processing_latency_seconds_bucket{consumer='alerts'}[1m])))",
+      "description": "Alerts consumer processing latency 50th percentile",
+      "unit": "seconds"
+    },
+    "processing_latency_p95": {
+      "query": "histogram_quantile(0.95, sum by (le) (rate(consumer_processing_latency_seconds_bucket{consumer='alerts'}[1m])))",
+      "description": "Alerts consumer processing latency 95th percentile",
+      "unit": "seconds"
+    },
+    "processing_latency_p99": {
+      "query": "histogram_quantile(0.99, sum by (le) (rate(consumer_processing_latency_seconds_bucket{consumer='alerts'}[1m])))",
+      "description": "Alerts consumer processing latency 99th percentile",
+      "unit": "seconds"
+    },
+    "alerts_stored_per_sec": {
+      "query": "sum(rate(consumer_alerts_stored_total{consumer='alerts'}[1m]))",
+      "description": "Alerts stored per second (total throughput)",
+      "unit": "alerts/s"
+    },
+    "buy_alerts_per_sec": {
+      "query": "sum(rate(consumer_alerts_stored_total{consumer='alerts', alert_type='BUY'}[1m]))",
+      "description": "BUY alerts stored per second",
+      "unit": "alerts/s"
+    },
+    "sell_alerts_per_sec": {
+      "query": "sum(rate(consumer_alerts_stored_total{consumer='alerts', alert_type='SELL'}[1m]))",
+      "description": "SELL alerts stored per second",
+      "unit": "alerts/s"
+    },
+    "errors_per_sec": {
+      "query": "sum(rate(consumer_errors_total{consumer='alerts'}[1m]))",
+      "description": "Alerts consumer errors per second",
+      "unit": "errors/s"
+    },
+    "lag_messages": {
+      "query": "sum(kafka_consumergroup_lag{consumergroup='alerts_consumer_group', topic='alerts'})",
+      "description": "Kafka consumer lag for alerts topic (total messages behind)",
+      "unit": "messages"
+    }
+  },
+  "spark_processor": {
+    "batch_duration_avg": {
+      "query": "sum(rate(spark_batch_duration_seconds_sum[1m])) / sum(rate(spark_batch_duration_seconds_count[1m]))",
+      "description": "Spark batch processing time average",
+      "unit": "seconds"
+    },
+    "batch_duration_p50": {
+      "query": "histogram_quantile(0.50, sum by (le) (rate(spark_batch_duration_seconds_bucket[1m])))",
+      "description": "Spark batch processing time 50th percentile",
+      "unit": "seconds"
+    },
+    "batch_duration_p95": {
+      "query": "histogram_quantile(0.95, sum by (le) (rate(spark_batch_duration_seconds_bucket[1m])))",
+      "description": "Spark batch processing time 95th percentile",
+      "unit": "seconds"
+    },
+    "batch_duration_p99": {
+      "query": "histogram_quantile(0.99, sum by (le) (rate(spark_batch_duration_seconds_bucket[1m])))",
+      "description": "Spark batch processing time 99th percentile",
+      "unit": "seconds"
+    },
+    "input_rate_rows_per_sec": {
+      "query": "sum(rate(spark_input_rows_total[1m]))",
+      "description": "Spark input rate: rows read from Kafka prices topic per second",
+      "unit": "rows/s"
+    },
+    "output_rate_rows_per_sec": {
+      "query": "sum(rate(spark_output_rows_total[1m]))",
+      "description": "Spark output rate: rows written to Kafka alerts topic per second",
+      "unit": "rows/s"
+    },
+    "batches_per_sec": {
+      "query": "sum(rate(spark_batches_completed_total[1m]))",
+      "description": "Spark batches completed per second",
+      "unit": "batches/s"
+    },
+    "errors_per_sec": {
+      "query": "sum(rate(spark_errors_total[1m]))",
+      "description": "Spark errors per second",
+      "unit": "errors/s"
     }
   },
   "infrastructure": {
@@ -148,6 +252,23 @@
       "query": "sum(rate(container_fs_writes_bytes_total{name!=\"\"}[1m]))",
       "description": "Total disk write rate across all containers",
       "unit": "bytes/s"
+    }
+  },
+  "clock_monitoring": {
+    "clock_skew_seconds": {
+      "query": "binance_clock_skew_seconds",
+      "description": "Clock skew between local system and Binance server (Local - Binance). Positive means local is ahead.",
+      "unit": "seconds"
+    },
+    "api_round_trip_seconds": {
+      "query": "binance_api_round_trip_seconds",
+      "description": "Round-trip time for Binance REST API time check request",
+      "unit": "seconds"
+    },
+    "clock_skew_errors_per_sec": {
+      "query": "rate(binance_time_request_errors_total[1m])",
+      "description": "Failed time check requests per second",
+      "unit": "errors/s"
     }
   }
 }

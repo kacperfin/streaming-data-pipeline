@@ -57,6 +57,46 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  spark-processor:
+    build:
+      context: .
+      dockerfile: Dockerfile.spark
+    container_name: spark-processor
+    env_file: .env
+    command: >
+      /opt/spark/bin/spark-submit
+      --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.7
+      --conf spark.jars.ivy=/tmp/.ivy2
+      --master local[*]
+      --conf spark.driver.memory=1g
+      --conf spark.executor.memory=1g
+      /app/src/spark_processor.py
+    ports:
+      - "4040:4040"
+      - "8002:8002"  # Expose Prometheus metrics
+    volumes:
+      - spark_checkpoints:/tmp/spark-checkpoints
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
+
+  alerts-consumer:
+    build: .
+    container_name: alerts-consumer
+    env_file: .env
+    command: python -u alerts_consumer.py
+    ports:
+      - "8003:8003"  # Expose Prometheus metrics
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      spark-processor:
+        condition: service_started
+    restart: unless-stopped
+
   streamlit-app:
     build: .
     container_name: streamlit-app
@@ -84,6 +124,36 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
+    restart: unless-stopped
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.52.0
+    container_name: cadvisor
+    command:
+      - --housekeeping_interval=5s
+      - --enable_metrics=cpu,cpuLoad,memory,network,diskIO
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    restart: unless-stopped
+
+  clock-skew-monitor:
+    build: .
+    container_name: clock-skew-monitor
+    env_file: .env
+    command: python -u clock_skew_monitor.py
+    environment:
+      - CLOCK_SKEW_INTERVAL=30
+      - CLOCK_SKEW_METRICS_PORT=8004
+    ports:
+      - "8004:8004"
     restart: unless-stopped
 
   prometheus:
@@ -116,26 +186,9 @@ services:
       - prometheus
     restart: unless-stopped
 
-  cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.52.0
-    container_name: cadvisor
-    command:
-      - --housekeeping_interval=5s
-      - --enable_metrics=cpu,cpuLoad,memory,network,diskIO
-    ports:
-      - "8080:8080"
-    volumes:
-      - /:/rootfs:ro
-      - /var/run:/var/run:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /sys:/sys:ro
-      - /var/lib/docker/:/var/lib/docker:ro
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    privileged: true
-    restart: unless-stopped
-
 volumes:
   kafka_data:
   redis_data:
   prometheus_data:
   grafana_data:
+  spark_checkpoints:

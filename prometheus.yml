@@ -13,6 +13,16 @@ scrape_configs:
     static_configs:
       - targets: ['prices-consumer:8001']
 
+  # Spark Processor metrics
+  - job_name: 'spark-processor'
+    static_configs:
+      - targets: ['spark-processor:8002']
+
+  # Alerts Consumer metrics
+  - job_name: 'alerts-consumer'
+    static_configs:
+      - targets: ['alerts-consumer:8003']
+
   # Kafka metrics (consumer lag, etc.)
   - job_name: 'kafka'
     static_configs:
@@ -22,3 +32,8 @@ scrape_configs:
   - job_name: 'cadvisor'
     static_configs:
       - targets: ['cadvisor:8080']
+
+  # Clock Skew Monitor metrics
+  - job_name: 'clock-skew-monitor'
+    static_configs:
+      - targets: ['clock-skew-monitor:8004']

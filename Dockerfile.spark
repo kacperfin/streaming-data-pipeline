@@ -1,0 +1,24 @@
+# Dockerfile for Spark processor
+# Uses official Spark image with Python support
+
+FROM apache/spark:3.5.7-python3
+
+USER root
+
+WORKDIR /app
+
+# Install pip packages (pyspark is already included in the base image)
+COPY requirements-spark.txt .
+RUN pip install --no-cache-dir -r requirements-spark.txt
+
+COPY src/ ./src/
+
+# Create writable directories for Ivy cache and Spark checkpoints
+RUN mkdir -p /tmp/.ivy2 /tmp/spark-checkpoints && chmod -R 777 /tmp/.ivy2 /tmp/spark-checkpoints
+
+ENV PYTHONPATH=/app/src
+ENV IVY_HOME=/tmp/.ivy2
+
+WORKDIR /app/src
+
+USER spark
