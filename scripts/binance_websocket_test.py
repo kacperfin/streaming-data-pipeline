@@ -1,3 +1,11 @@
+"""
+Binance WebSocket connection test script.
+
+Connects to Binance WebSocket API and displays incoming messages for 15 seconds.
+Reports statistics including total messages received and messages per second.
+Useful for verifying connectivity and estimating throughput before running experiments.
+"""
+
 import json
 import sys
 import threading
