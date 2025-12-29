@@ -284,7 +284,7 @@ def main():
         .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS) \
         .option("topic", KAFKA_TOPIC_ALERTS) \
         .option("checkpointLocation", "/tmp/spark-checkpoints/alerts") \
-        .trigger(processingTime="5 seconds") \
+        .trigger(processingTime="0 seconds") \
         .start()
 
     logger.info("Streaming query started")
